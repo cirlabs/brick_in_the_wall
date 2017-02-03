@@ -21,7 +21,7 @@ class postgis_to_midi(object):
     min_attack = 30
     max_attack = 255
 
-    seconds_per_mile = 0.033
+    seconds_per_mile = 0.1
 
     base_octave = 3
     octave_range = 5
@@ -50,8 +50,9 @@ class postgis_to_midi(object):
         self.cursor = self.conn.cursor()
         seg_data = self.get_seg_start_end()
         for segment in seg_data:
+            print segment
             start_pct = self.get_distance_from_start(segment)
-            note_info.append({'start_pct': start_pct, 'length_m': segment[2]})
+            note_info.append({'start_pct': start_pct, 'length_m': segment[2], 'type': segment[3]})
         return sorted(note_info, key=lambda k: k['start_pct'])  # Sort by start_pct just in case the segments are out of order
 
     def get_connection(self):
@@ -72,12 +73,11 @@ class postgis_to_midi(object):
     def get_seg_start_end(self):
         ''' Get component linestrings from original multilinestring, extract start and end points, then length '''
         self.cursor.execute("""
-                SELECT ST_AsText(ST_StartPoint((l.geom_dump).geom)) AS start_point,
-                ST_AsText(ST_EndPoint((l.geom_dump).geom)) AS end_point,
-                ST_Length((l.geom_dump).geom) AS seg_length
-                FROM ( SELECT ST_Dump(geom) AS geom_dump
-                        FROM border_with_fence_equidistant_landonly
-                     ) AS l;
+                SELECT ST_AsText(ST_StartPoint(ST_LineMerge(geom))) AS start_point,
+                ST_AsText(ST_EndPoint(ST_LineMerge(geom))) AS end_point,
+                ST_Length(geom) AS seg_length,
+                gen_type
+                FROM border_that_is_fenced_equidistant_single;
             """)
         return self.cursor.fetchall()
 
@@ -90,9 +90,9 @@ class postgis_to_midi(object):
         """ % (segment[0], segment[1]))
         return min(self.cursor.fetchone())
 
-    def just_one_note(self, start_beat, num_beats, miditime_instance, octave):
+    def just_one_note(self, start_beat, num_beats, pitch, miditime_instance, octave):
         channel = 0
-        midi_pitch = miditime_instance.note_to_midi_pitch('E5')
+        midi_pitch = miditime_instance.note_to_midi_pitch(pitch)
         print list([[start_beat, midi_pitch, 100, num_beats], channel])
         return [[[start_beat, midi_pitch, 100, num_beats], channel]]
 
@@ -202,13 +202,17 @@ class postgis_to_midi(object):
             segment_start_beat = self.beat_meters(segment_start_meters)
             segment_end_beat = self.beat_meters(segment_start_meters + r['length_m'])
             duration_in_beats = segment_end_beat - segment_start_beat
+            if r['type'] == 'pedestrian':
+                pitch = 'E5'
+            elif r['type'] == 'vehicle':
+                pitch = 'F6'
 
             # if duration_in_beats < 3:
             #     duration_in_beats = 3
             # print start_beat, duration_in_beats
             # new_notes, start_note_index = self.bigger_boat_2(segment_start_beat, start_note_index, duration_in_beats, mymidi, octave)
             # new_notes = self.bigger_boat(segment_start_beat, duration_in_beats, mymidi, octave)
-            new_notes = self.just_one_note(segment_start_beat, duration_in_beats, mymidi, octave)
+            new_notes = self.just_one_note(segment_start_beat, duration_in_beats, pitch, mymidi, octave)
             note_list = note_list + new_notes
 
         # Add a track with those notes
