@@ -1,6 +1,7 @@
 # import csv
 import psycopg2
 import math
+from math import floor
 from datetime import datetime
 from miditime.miditime import MIDITime
 
@@ -37,7 +38,7 @@ class postgis_to_midi(object):
         if self.conn:
             segment_note_info = self.extract_from_spatial_data()
             # print segment_note_info
-            self.list_to_miditime(segment_note_info, 'brick_in_the_wall.mid', 3)
+            self.list_to_miditime(segment_note_info, 'brick_in_the_wall_ped_vehicle.mid', 3)
 
         # self.just_jaws('williams.mid')
         # self.csv_to_miditime('data/keystone_gas_plant.csv', 'keystone_leaks.mid', 3)
@@ -180,6 +181,15 @@ class postgis_to_midi(object):
         beats_per_meter = self.seconds_per_mile / 1609.34 * beats_per_second
         return round(beats_per_meter * num_meters, 2)
 
+    def nearest_nth_beat(self, float_beat, round_to=16):
+        ''' Round to a fraction besides 10ths '''
+        # Get floor to handle numbers greater than 1
+        whole_remainder = floor(float_beat)
+        decimal_part = float_beat - whole_remainder
+        nths = (round_to * decimal_part * 10) / 10
+        nearest_nth_in_tenths = round(nths) / round_to
+        return whole_remainder + nearest_nth_in_tenths
+
     def list_to_miditime(self, raw_data, outfile, octave):
         # raw_data = list(self.read_csv(infile))
 
@@ -199,9 +209,11 @@ class postgis_to_midi(object):
             # ended_days_since_epoch = mymidi.days_since_epoch(ended_date)
             segment_start_meters = r['start_pct'] * border_full_length
 
-            segment_start_beat = self.beat_meters(segment_start_meters)
-            segment_end_beat = self.beat_meters(segment_start_meters + r['length_m'])
+            segment_start_beat = self.nearest_nth_beat(self.beat_meters(segment_start_meters), 16)
+            segment_end_beat = self.nearest_nth_beat(self.beat_meters(segment_start_meters + r['length_m']), 16)
             duration_in_beats = segment_end_beat - segment_start_beat
+            if duration_in_beats == 0:
+                duration_in_beats = float(1)/float(16)  # Minimum duration of 1/16
             if r['type'] == 'pedestrian':
                 pitch = 'E5'
             elif r['type'] == 'vehicle':
