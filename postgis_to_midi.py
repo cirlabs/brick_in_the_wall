@@ -5,7 +5,6 @@ from math import floor
 from datetime import datetime
 from miditime.miditime import MIDITime
 
-from lib.jaws_notes import JAWS_NOTES
 from lib.fence_segment_notes import FENCE_SEGMENT_NOTES
 
 import local_settings
@@ -30,19 +29,15 @@ class postgis_to_midi(object):
     conn = False
     cursor = False
 
-    #### If needed, insert equidistant project into spatial_ref_sys table of PostGIS
-    #### """INSERT into spatial_ref_sys (srid, auth_name, auth_srid, proj4text, srtext) values ( 102005, 'esri', 102005, '+proj=eqdc +lat_0=0 +lon_0=0 +lat_1=33 +lat_2=45 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs ', 'PROJCS["USA_Contiguous_Equidistant_Conic",GEOGCS["GCS_North_American_1983",DATUM["North_American_Datum_1983",SPHEROID["GRS_1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Equidistant_Conic"],PARAMETER["False_Easting",0],PARAMETER["False_Northing",0],PARAMETER["Central_Meridian",-96],PARAMETER["Standard_Parallel_1",33],PARAMETER["Standard_Parallel_2",45],PARAMETER["Latitude_Of_Origin",39],UNIT["Meter",1],AUTHORITY["EPSG","102005"]]');"""
+    # If needed, insert equidistant project into spatial_ref_sys table of PostGIS
+    # """INSERT into spatial_ref_sys (srid, auth_name, auth_srid, proj4text, srtext) values ( 102005, 'esri', 102005, '+proj=eqdc +lat_0=0 +lon_0=0 +lat_1=33 +lat_2=45 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs ', 'PROJCS["USA_Contiguous_Equidistant_Conic",GEOGCS["GCS_North_American_1983",DATUM["North_American_Datum_1983",SPHEROID["GRS_1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Equidistant_Conic"],PARAMETER["False_Easting",0],PARAMETER["False_Northing",0],PARAMETER["Central_Meridian",-96],PARAMETER["Standard_Parallel_1",33],PARAMETER["Standard_Parallel_2",45],PARAMETER["Latitude_Of_Origin",39],UNIT["Meter",1],AUTHORITY["EPSG","102005"]]');"""
 
     def __init__(self):
         self.conn = self.get_connection()
         if self.conn:
             segment_note_info = self.extract_from_spatial_data()
-            # print segment_note_info
             self.list_to_miditime(segment_note_info, 'brick_in_the_wall_ped_vehicle.mid', 3)
 
-        # self.just_jaws('williams.mid')
-        # self.csv_to_miditime('data/keystone_gas_plant.csv', 'keystone_leaks.mid', 3)
-        # self.csv_to_miditime('data/waha_gas_plant.csv', 'waha_leaks.mid', 3)
 
         self.conn.close()
 
@@ -98,7 +93,7 @@ class postgis_to_midi(object):
         return [[[start_beat, midi_pitch, 100, num_beats], channel]]
 
     def bigger_boat(self, start_beat, num_beats, miditime_instance, octave):
-        # octave = 3
+        ''' This is vestigial to the final piece -- we went with the one-note option, but might be fun to play with. May need cleaning up, so use at your own risk. '''
         rest_between_loops = 0.5
         note_series = FENCE_SEGMENT_NOTES
         looped_note_series = list(note_series)
@@ -134,7 +129,7 @@ class postgis_to_midi(object):
         return notes
 
     def bigger_boat_2(self, start_beat, next_note_index, num_beats, miditime_instance, octave):
-        '''Play through the song, x notes at a time (rather than starting over.)'''
+        ''' This is vestigial to the final piece -- we went with the one-note option, but might be fun to play with. May need cleaning up, so use at your own risk. Play through the song, x notes at a time (rather than starting over.)'''
 
         # Make list of possible beats
         beats_list = sorted(list(set([j[0] for j in FENCE_SEGMENT_NOTES])))
@@ -167,15 +162,6 @@ class postgis_to_midi(object):
 
         return (notes, next_note_index)
 
-    # def just_jaws(self, outfile):  # Just play the whole song
-    #     mymidi = MIDITime(self.tempo, outfile, self.seconds_per_mile, self.base_octave, self.octave_range, self.epoch)
-    #     note_list = self.bigger_boat(0, 70, mymidi, self.base_octave)
-    #     # Add a track with those notes
-    #     mymidi.add_track(note_list)
-    #
-    #     # Output the .mid file
-    #     mymidi.save_midi()
-
     def beat_meters(self, num_meters):
         beats_per_second = self.tempo / 60.0
         beats_per_meter = self.seconds_per_mile / 1609.34 * beats_per_second
@@ -191,8 +177,6 @@ class postgis_to_midi(object):
         return whole_remainder + nearest_nth_in_tenths
 
     def list_to_miditime(self, raw_data, outfile, octave):
-        # raw_data = list(self.read_csv(infile))
-
         mymidi = MIDITime(self.tempo, outfile, self.seconds_per_mile, self.base_octave, self.octave_range, self.epoch)
 
         note_list = []
@@ -202,11 +186,6 @@ class postgis_to_midi(object):
         print border_full_length
 
         for r in raw_data:
-            # began_date = datetime.strptime(r["began_date"], "%Y-%m-%d %H:%M:%S+00:00")  # 2009-01-15 16:15:00+00:00
-            # ended_date = datetime.strptime(r["ended_date"], "%Y-%m-%d %H:%M:%S+00:00")
-            #
-            # began_days_since_epoch = mymidi.days_since_epoch(began_date)
-            # ended_days_since_epoch = mymidi.days_since_epoch(ended_date)
             segment_start_meters = r['start_pct'] * border_full_length
 
             segment_start_beat = self.nearest_nth_beat(self.beat_meters(segment_start_meters), 16)
@@ -219,9 +198,7 @@ class postgis_to_midi(object):
             elif r['type'] == 'vehicle':
                 pitch = 'F6'
 
-            # if duration_in_beats < 3:
-            #     duration_in_beats = 3
-            # print start_beat, duration_in_beats
+            # I've left a few other options commented out here. The live version just plays one long note for the duration of the fence segment, but the othres play through a melody. We ended up doing all of our melodic stuff in Live once we had a raw midi file.
             # new_notes, start_note_index = self.bigger_boat_2(segment_start_beat, start_note_index, duration_in_beats, mymidi, octave)
             # new_notes = self.bigger_boat(segment_start_beat, duration_in_beats, mymidi, octave)
             new_notes = self.just_one_note(segment_start_beat, duration_in_beats, pitch, mymidi, octave)
